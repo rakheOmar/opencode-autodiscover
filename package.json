@@ -11,6 +11,11 @@
     "plugin"
   ],
   "license": "MIT",
+  "author": "rakheomar",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rakheomar/opencode-autodiscover"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

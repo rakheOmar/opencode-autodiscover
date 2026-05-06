@@ -1,0 +1,7 @@
+tests/
+src/
+oxfmt.config.ts
+oxlint.config.ts
+tsconfig.json
+AGENTS.md
+.gitignore
