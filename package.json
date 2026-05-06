@@ -1,0 +1,35 @@
+{
+  "name": "opencode-autodiscover",
+  "version": "1.0.0",
+  "description": "Auto-discover models from local OpenAI-compatible API endpoints for OpenCode",
+  "keywords": [
+    "llm",
+    "lm-studio",
+    "local-models",
+    "ollama",
+    "opencode",
+    "plugin"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
+    "typescript": "^5.7.0",
+    "ultracite": "^7.6.3",
+    "vitest": "^3.0.0"
+  }
+}
