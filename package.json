@@ -27,7 +27,8 @@
     "fix": "ultracite fix"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "latest"
+    "@opencode-ai/plugin": "latest",
+    "models-dev-db": "latest"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

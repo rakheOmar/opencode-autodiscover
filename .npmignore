@@ -1,5 +1,6 @@
 tests/
 src/
+plugin-manual-testing/
 oxfmt.config.ts
 oxlint.config.ts
 tsconfig.json

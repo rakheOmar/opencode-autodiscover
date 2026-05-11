@@ -5,8 +5,8 @@ Auto-discover models from local OpenAI-compatible API endpoints for [OpenCode](h
 ## Features
 
 - Auto-discovers models from local endpoints (Ollama, LM Studio, LLM proxies)
-- Fetches metadata from OpenRouter (context window, capabilities)
-- Caches OpenRouter data locally (24h TTL)
+- Fetches metadata from Models.dev and OpenRouter (context window, capabilities, cost)
+- Caches metadata locally (24h TTL)
 - Supports multiple endpoints
 - API key authentication via config or environment variables
 
@@ -110,9 +110,20 @@ opencode plugin opencode-autodiscover --pure  # Run without external plugins
 
 1. On startup, the plugin reads provider configs with `baseURL` options
 2. Fetches available models from each endpoint (`/v1/models`)
-3. Normalizes model IDs and looks up metadata from OpenRouter
+3. Looks up metadata from Models.dev and OpenRouter (context window, cost, capabilities)
 4. Injects discovered models into the provider config
 5. Models appear in OpenCode's `/models` UI
+
+## Caching
+
+Metadata is cached locally for 24 hours:
+
+- **Location:** `~/.cache/opencode-autodiscover/`
+- **Files:**
+  - `openrouter.json` — OpenRouter metadata cache
+  - `modelsdev.json` — Models.dev metadata cache
+
+Use the `refresh-local-models` tool to clear cache and re-fetch.
 
 ## Development
 

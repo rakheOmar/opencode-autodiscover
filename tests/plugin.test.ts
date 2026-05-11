@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 import { fetchModels } from "../src/fetcher";
 import { LocalModelsPlugin } from "../src/index";
-import { lookupModelMetadata } from "../src/openrouter";
+import { ensureCache } from "../src/modelsdev";
+import { lookupModelMetadata, getAllModels } from "../src/openrouter";
 
 const mockFetch = vi.fn<() => Promise<Response>>();
 globalThis.fetch = mockFetch;
@@ -17,12 +18,22 @@ vi.mock(import("../src/openrouter"), () => ({
   lookupModelMetadata: vi.fn<() => Promise<unknown>>(),
 }));
 
+vi.mock(import("../src/modelsdev"), () => ({
+  clearCache: vi.fn<() => void>(),
+  ensureCache: vi.fn<() => Promise<Record<string, unknown>>>(),
+  lookupModelMetadata: vi.fn<() => Promise<unknown>>(),
+}));
+
 const mockFetchModels = vi.mocked(fetchModels);
 const mockLookupModelMetadata = vi.mocked(lookupModelMetadata);
+const mockGetAllModels = vi.mocked(getAllModels);
+const mockEnsureCache = vi.mocked(ensureCache);
 
 describe(LocalModelsPlugin, () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetAllModels.mockResolvedValue([]);
+    mockEnsureCache.mockResolvedValue({});
   });
 
   it("discovers models from configured providers", async () => {

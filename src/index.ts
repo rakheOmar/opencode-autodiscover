@@ -2,7 +2,14 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 
 import { fetchModels } from "./fetcher.js";
-import { lookupModelMetadata, clearCache, getAllModels } from "./openrouter.js";
+import {
+  lookupModelMetadata as lookupModelsDevMetadata,
+  clearCache as clearModelsDevCache,
+} from "./modelsdev.js";
+import {
+  lookupModelMetadata as lookupOpenRouterMetadata,
+  clearCache as clearOpenRouterCache,
+} from "./openrouter.js";
 import { sanitizeErrorMessage } from "./security.js";
 
 interface ProviderConfig {
@@ -63,27 +70,35 @@ const buildModelConfig = (
     reasoning?: boolean;
     temperature?: boolean;
   },
-  metadata: {
+  openrouterMetadata: {
     name: string;
     context_length: number;
     top_provider: { max_completion_tokens: number | null };
+  } | null,
+  modelsDevMetadata: {
+    limit: { context: number; output: number };
+    cost?: { input: number; output: number };
+    reasoning?: boolean;
+    tool_call?: boolean;
+    temperature?: boolean;
   } | null
 ): Record<string, unknown> => {
-  const displayName =
-    model.name === model.id && metadata?.name ? metadata.name : model.name;
-
   const config: Record<string, unknown> = {
-    limit: buildModelLimit(model, metadata),
-    name: displayName,
+    limit: buildModelLimit(model, openrouterMetadata),
+    name: model.name,
   };
 
-  if (model.tool_call) {
+  if (modelsDevMetadata?.cost) {
+    config.cost = modelsDevMetadata.cost;
+  }
+
+  if (model.tool_call || modelsDevMetadata?.tool_call) {
     config.tool_call = true;
   }
-  if (model.reasoning) {
+  if (model.reasoning || modelsDevMetadata?.reasoning) {
     config.reasoning = true;
   }
-  if (model.temperature) {
+  if (model.temperature || modelsDevMetadata?.temperature) {
     config.temperature = true;
   }
 
@@ -137,10 +152,17 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
           }
 
           for (const model of discoveredModels) {
-            const metadata = await lookupModelMetadata(model.id);
+            const [openrouterMetadata, modelsDevMetadata] = await Promise.all([
+              lookupOpenRouterMetadata(model.id),
+              lookupModelsDevMetadata(model.id),
+            ]);
 
             if (!provider.models[model.id]) {
-              provider.models[model.id] = buildModelConfig(model, metadata);
+              provider.models[model.id] = buildModelConfig(
+                model,
+                openrouterMetadata,
+                modelsDevMetadata
+              );
             }
           }
 
@@ -169,9 +191,10 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
       "refresh-local-models": tool({
         args: {},
         description: "Refresh models from local API endpoints",
+        // eslint-disable-next-line require-await
         async execute(_args, _context) {
-          clearCache();
-          await getAllModels();
+          clearOpenRouterCache();
+          clearModelsDevCache();
 
           return "Models refreshed. Please restart OpenCode to pick up new models.";
         },

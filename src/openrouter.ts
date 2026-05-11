@@ -7,9 +7,9 @@ import type { OpenRouterModel, CacheEntry } from "./types.js";
 const CACHE_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || "",
   ".cache",
-  "opencode-local-models"
+  "opencode-autodiscover"
 );
-const CACHE_FILE = path.join(CACHE_DIR, "models.json");
+const CACHE_FILE = path.join(CACHE_DIR, "openrouter.json");
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 let cachedModels: OpenRouterModel[] | null = null;

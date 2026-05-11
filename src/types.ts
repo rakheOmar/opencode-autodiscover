@@ -54,3 +54,16 @@ export interface CacheEntry {
   timestamp: number;
   models: OpenRouterModel[];
 }
+
+export interface ModelsDevModel {
+  limit: { context: number; output: number };
+  cost?: { input: number; output: number; cache_read?: number };
+  reasoning?: boolean;
+  tool_call?: boolean;
+  temperature?: boolean;
+}
+
+export interface ModelsDevCacheEntry {
+  timestamp: number;
+  models: Record<string, ModelsDevModel>;
+}

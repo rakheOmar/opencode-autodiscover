@@ -11,9 +11,9 @@ globalThis.fetch = mockFetch;
 const CACHE_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || "",
   ".cache",
-  "opencode-local-models"
+  "opencode-autodiscover"
 );
-const CACHE_FILE = path.join(CACHE_DIR, "models.json");
+const CACHE_FILE = path.join(CACHE_DIR, "openrouter.json");
 
 describe(lookupModelMetadata, () => {
   beforeEach(() => {
