@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { lookupModelMetadata, clearCache } from "../src/openrouter";
 
-vi.mock(import('node:https'), () => ({
+vi.mock(import("node:https"), () => ({
   default: { get: vi.fn<() => unknown>() },
   get: vi.fn<() => unknown>(),
 }));
