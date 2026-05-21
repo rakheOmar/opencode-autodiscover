@@ -19,14 +19,20 @@ export const clearCache = (): void => {
 };
 
 const fetchFromOpenRouter = async (): Promise<OpenRouterModel[]> => {
-  const response = await fetch("https://openrouter.ai/api/v1/models");
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { "Accept-Encoding": "identity" },
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return [];
+    }
+
+    const data = await response.json();
+    return data.data || [];
+  } catch {
     return [];
   }
-
-  const data = await response.json();
-  return data.data || [];
 };
 
 const readCache = (): OpenRouterModel[] | null => {

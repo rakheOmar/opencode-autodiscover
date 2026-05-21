@@ -1,6 +1,6 @@
 {
   "name": "opencode-autodiscover",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Auto-discover models from local OpenAI-compatible API endpoints for OpenCode",
   "keywords": [
     "llm",

@@ -118,4 +118,44 @@ describe(lookupModelMetadata, () => {
     await lookupModelMetadata("qwen3-32b");
     expect(mockFetch).toHaveBeenCalledOnce();
   });
+
+  it("returns null when fetch fails with decompression error", async () => {
+    mockFetch.mockRejectedValueOnce(
+      new TypeError("Decompression error", {
+        cause: new Error("ZlibError: unexpected end of file"),
+      })
+    );
+
+    const metadata = await lookupModelMetadata("llama-3.3-70b-instruct");
+    expect(metadata).toBeNull();
+  });
+
+  it("sends Accept-Encoding identity to prevent compressed responses", async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () =>
+        Promise.resolve({
+          data: [
+            {
+              context_length: 131_072,
+              id: "meta-llama/llama-3.3-70b-instruct",
+              name: "Meta: Llama 3.3 70B Instruct",
+              supported_parameters: [],
+              top_provider: { max_completion_tokens: 16_384 },
+            },
+          ],
+        }),
+      ok: true,
+    } as Response);
+
+    await lookupModelMetadata("llama-3.3-70b-instruct");
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "https://openrouter.ai/api/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Accept-Encoding": "identity",
+        }),
+      })
+    );
+  });
 });
