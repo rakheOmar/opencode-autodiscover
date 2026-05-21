@@ -64,7 +64,8 @@ describe(fetchModels, () => {
 
     await fetchModels("http://localhost:11434/v1");
 
-    const { headers } = mockFetch.mock.calls[0][1] as RequestInit;
+    const call = mockFetch.mock.calls[0] as unknown[];
+    const { headers } = (call[1] ?? {}) as RequestInit;
     expect(headers).not.toHaveProperty("Authorization");
   });
 

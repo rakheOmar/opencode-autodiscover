@@ -9,6 +9,7 @@ Auto-discover models from local OpenAI-compatible API endpoints for [OpenCode](h
 - Caches metadata locally (24h TTL)
 - Supports multiple endpoints
 - API key authentication via config or environment variables
+- Model filtering with include/exclude patterns
 
 ## Installation
 
@@ -90,6 +91,30 @@ Override metadata for specific models:
   }
 }
 ```
+
+### Model Filtering
+
+Control which models are discovered using `include` and `exclude` glob patterns inside `options`:
+
+```json
+{
+  "provider": {
+    "local-ollama": {
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "include": ["qwen/*"],
+        "exclude": ["*embedding*", "*test*"]
+      }
+    }
+  }
+}
+```
+
+- `include` — if set, only models matching at least one pattern are discovered
+- `exclude` — models matching any pattern are skipped (applied after `include`)
+- `*` matches anything (including `/`)
+- Matching is case-insensitive
+- Special characters (`.`, `[`, `]`, etc.) are treated as literals
 
 ## Usage
 

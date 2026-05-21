@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as https from "node:https";
 import * as path from "node:path";
 
 import { normalizeModelId } from "./normalize.js";
@@ -18,22 +19,47 @@ export const clearCache = (): void => {
   cachedModels = null;
 };
 
-const fetchFromOpenRouter = async (): Promise<OpenRouterModel[]> => {
-  try {
-    const response = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: { "Accept-Encoding": "identity" },
+const fetchFromOpenRouter = (): Promise<OpenRouterModel[]> =>
+  // eslint-disable-next-line promise/avoid-new
+  new Promise((resolve) => {
+    let resolved = false;
+    const done = (models: OpenRouterModel[]): void => {
+      if (!resolved) {
+        resolved = true;
+        resolve(models);
+      }
+    };
+
+    const req = https.get(
+      "https://openrouter.ai/api/v1/models",
+      { headers: { "Accept-Encoding": "identity" } },
+      (res) => {
+        if (res.statusCode !== 200) {
+          done([]);
+          return;
+        }
+
+        let data = "";
+        res.on("data", (chunk: string) => {
+          data += chunk;
+        });
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            done(json.data || []);
+          } catch {
+            done([]);
+          }
+        });
+      }
+    );
+
+    req.on("error", () => {
+      done([]);
     });
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-    return data.data || [];
-  } catch {
-    return [];
-  }
-};
+    req.end();
+  });
 
 const readCache = (): OpenRouterModel[] | null => {
   if (cachedModels) {

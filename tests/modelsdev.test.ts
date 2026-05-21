@@ -1,4 +1,4 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
+import { describe, it, expect } from "vitest";
 
 import { lookupModelMetadata } from "../src/modelsdev";
 
@@ -35,7 +35,7 @@ describe(lookupModelMetadata, () => {
       "anthropic/claude-sonnet-4-20250514"
     );
     expect(metadata).not.toBeNull();
-    expectTypeOf(metadata?.reasoning).toBeBoolean();
-    expectTypeOf(metadata?.tool_call).toBeBoolean();
+    expect(metadata?.reasoning).toStrictEqual(expect.any(Boolean));
+    expect(metadata?.tool_call).toStrictEqual(expect.any(Boolean));
   });
 });

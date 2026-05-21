@@ -2,6 +2,7 @@ import type { Plugin } from "@opencode-ai/plugin";
 import { tool } from "@opencode-ai/plugin";
 
 import { fetchModels } from "./fetcher.js";
+import { matchesFilter } from "./filter.js";
 import {
   lookupModelMetadata as lookupModelsDevMetadata,
   clearCache as clearModelsDevCache,
@@ -17,6 +18,8 @@ interface ProviderConfig {
   options?: {
     baseURL?: string;
     apiKey?: string;
+    include?: string[];
+    exclude?: string[];
     [key: string]: unknown;
   };
   models?: Record<string, unknown>;
@@ -147,11 +150,31 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
 
           const discoveredModels = await fetchModels(baseURL, apiKey);
 
+          const include = provider.options?.include || [];
+          const exclude = provider.options?.exclude || [];
+
+          const filteredModels = discoveredModels.filter((model) => {
+            const allowed = matchesFilter(model.id, include, exclude);
+            if (!allowed) {
+              const matched = exclude.find((p) =>
+                matchesFilter(model.id, [], [p])
+              );
+              void client.app.log({
+                body: {
+                  level: "info",
+                  message: `Excluded model: ${model.id} (matched pattern: ${matched})`,
+                  service: "opencode-autodiscover",
+                },
+              });
+            }
+            return allowed;
+          });
+
           if (!provider.models) {
             provider.models = {};
           }
 
-          for (const model of discoveredModels) {
+          for (const model of filteredModels) {
             const [openrouterMetadata, modelsDevMetadata] = await Promise.all([
               lookupOpenRouterMetadata(model.id),
               lookupModelsDevMetadata(model.id),
@@ -172,7 +195,7 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
           await client.app.log({
             body: {
               level: "info",
-              message: `Discovered ${discoveredModels.length} models from ${providerId}`,
+              message: `Discovered ${filteredModels.length} models from ${providerId}`,
               service: "opencode-autodiscover",
             },
           });
