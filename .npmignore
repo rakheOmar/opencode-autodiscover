@@ -1,3 +1,5 @@
+.github/
+.agents/
 tests/
 src/
 plugin-manual-testing/
@@ -6,3 +8,4 @@ oxlint.config.ts
 tsconfig.json
 AGENTS.md
 .gitignore
+.gitattributes
