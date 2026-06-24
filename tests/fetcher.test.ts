@@ -182,4 +182,106 @@ describe(fetchModels, () => {
     expect(models[0].tool_call).toBeTruthy();
     expect(models[0].temperature).toBeTruthy();
   });
+
+  it("passes custom headers through to the fetch call", async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({ data: [] }),
+      ok: true,
+    } as Response);
+
+    const customHeaders = {
+      "sleeve-base-url": "http://localhost:8081/v1",
+      "sleeve-harness": "opencode",
+    };
+
+    await fetchModels("http://localhost:11434/v1", undefined, customHeaders);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:11434/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "sleeve-base-url": "http://localhost:8081/v1",
+          "sleeve-harness": "opencode",
+        }),
+      })
+    );
+  });
+
+  it("does not let custom headers override Content-Type or Authorization", async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({ data: [] }),
+      ok: true,
+    } as Response);
+
+    const customHeaders = {
+      Authorization: "Bearer evil-token",
+      "CONTENT-TYPE": "text/html",
+      authorization: "Basic bad-creds",
+      "content-type": "text/plain",
+      "x-custom": "should-pass",
+    };
+
+    await fetchModels(
+      "http://localhost:11434/v1",
+      "sk-real-key",
+      customHeaders
+    );
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:11434/v1/models",
+      expect.objectContaining({
+        headers: {
+          Authorization: "Bearer sk-real-key",
+          "Content-Type": "application/json",
+          "x-custom": "should-pass",
+        },
+      })
+    );
+  });
+
+  it("converts non-string header values to strings", async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({ data: [] }),
+      ok: true,
+    } as Response);
+
+    await fetchModels("http://localhost:11434/v1", undefined, {
+      "x-count": 42,
+      "x-flag": true,
+      "x-name": "already-string",
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:11434/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "x-count": "42",
+          "x-flag": "true",
+          "x-name": "already-string",
+        }),
+      })
+    );
+  });
+
+  it("silently skips non-object customHeaders value", async () => {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({ data: [] }),
+      ok: true,
+    } as Response);
+
+    await fetchModels(
+      "http://localhost:11434/v1",
+      undefined,
+      "not-an-object" as never
+    );
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "http://localhost:11434/v1/models",
+      expect.objectContaining({
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+    );
+  });
 });

@@ -27,7 +27,8 @@ interface ModelsResponse {
 
 export const fetchModels = async (
   baseURL: string,
-  apiKey?: string
+  apiKey?: string,
+  customHeaders?: Record<string, unknown>
 ): Promise<DiscoveredModel[]> => {
   if (!isValidUrl(baseURL)) {
     return [];
@@ -41,6 +42,16 @@ export const fetchModels = async (
 
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    if (customHeaders && typeof customHeaders === "object") {
+      for (const [key, value] of Object.entries(customHeaders)) {
+        const lowerKey = key.toLowerCase();
+        if (lowerKey === "content-type" || lowerKey === "authorization") {
+          continue;
+        }
+        headers[key] = String(value);
+      }
     }
 
     const response = await fetch(url, { headers });

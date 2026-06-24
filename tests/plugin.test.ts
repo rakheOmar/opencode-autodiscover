@@ -99,6 +99,7 @@ describe("LocalModelsPlugin", () => {
 
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:11434/v1",
+      undefined,
       undefined
     );
     expect(config.provider["local-ollama"].models).toBeDefined();
@@ -138,7 +139,8 @@ describe("LocalModelsPlugin", () => {
 
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:8080/v1",
-      "sk-test-key"
+      "sk-test-key",
+      undefined
     );
   });
 
@@ -222,10 +224,12 @@ describe("LocalModelsPlugin", () => {
     expect(mockFetchModels).toHaveBeenCalledTimes(2);
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:11434/v1",
+      undefined,
       undefined
     );
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:1234/v1",
+      undefined,
       undefined
     );
   });
@@ -463,5 +467,53 @@ describe("LocalModelsPlugin", () => {
     expect(
       config.provider["local-ollama"].models?.["bge-embedding"]
     ).toBeDefined();
+  });
+
+  it("passes custom headers from provider options to fetchModels", async () => {
+    const { LocalModelsPlugin } = await import("../src/index");
+
+    mockFetchModels.mockResolvedValue([]);
+
+    const config = {
+      provider: {
+        "local-proxy": {
+          name: "Proxy",
+          options: {
+            baseURL: "http://localhost:8081/v1",
+            headers: {
+              "sleeve-base-url": "http://optiplex-3020:8081/v1",
+              "sleeve-harness": "opencode",
+            },
+          },
+        },
+      },
+    } as Record<
+      string,
+      Record<
+        string,
+        {
+          name: string;
+          options: {
+            baseURL: string;
+            headers?: Record<string, string>;
+          };
+        }
+      >
+    >;
+
+    const hooks = await LocalModelsPlugin(createMockInput());
+
+    if (hooks.config) {
+      await hooks.config(config as never);
+    }
+
+    expect(mockFetchModels).toHaveBeenCalledWith(
+      "http://localhost:8081/v1",
+      undefined,
+      {
+        "sleeve-base-url": "http://optiplex-3020:8081/v1",
+        "sleeve-harness": "opencode",
+      }
+    );
   });
 });

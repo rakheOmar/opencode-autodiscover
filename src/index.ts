@@ -138,6 +138,9 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
         }
 
         const apiKey = getApiKey(provider, providerId);
+        const customHeaders = provider.options?.headers as
+          | Record<string, unknown>
+          | undefined;
 
         try {
           await client.app.log({
@@ -148,7 +151,11 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
             },
           });
 
-          const discoveredModels = await fetchModels(baseURL, apiKey);
+          const discoveredModels = await fetchModels(
+            baseURL,
+            apiKey,
+            customHeaders
+          );
 
           const include = provider.options?.include || [];
           const exclude = provider.options?.exclude || [];
