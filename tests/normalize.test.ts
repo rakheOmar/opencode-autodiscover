@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { normalizeModelId } from "../src/normalize";
 
@@ -9,7 +9,7 @@ describe(normalizeModelId, () => {
 
   it("strips models/ prefix", () => {
     expect(normalizeModelId("models/llama-3.3-70b-instruct")).toBe(
-      "llama-3.3-70b-instruct"
+      "llama-3.3-70b-instruct",
     );
   });
 
@@ -31,7 +31,7 @@ describe(normalizeModelId, () => {
 
   it("strips org prefix from OpenRouter-style IDs", () => {
     expect(normalizeModelId("meta-llama/llama-3.3-70b-instruct")).toBe(
-      "llama-3.3-70b-instruct"
+      "llama-3.3-70b-instruct",
     );
   });
 

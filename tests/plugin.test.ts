@@ -1,13 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   DiscoveredModel,
-  OpenRouterModel,
   ModelsDevModel,
+  OpenRouterModel,
 } from "../src/types";
-
-const mockFetch = vi.fn<() => Promise<Response>>();
-globalThis.fetch = mockFetch;
 
 vi.mock(import("../src/fetcher"), () => ({
   fetchModels: vi.fn<() => Promise<DiscoveredModel[]>>(),
@@ -15,24 +12,19 @@ vi.mock(import("../src/fetcher"), () => ({
 
 vi.mock(import("../src/openrouter"), () => ({
   clearCache: vi.fn<() => void>(),
-  getAllModels: vi.fn<() => Promise<OpenRouterModel[]>>(),
   lookupModelMetadata: vi.fn<() => Promise<OpenRouterModel | null>>(),
 }));
 
 vi.mock(import("../src/modelsdev"), () => ({
   clearCache: vi.fn<() => void>(),
-  ensureCache: vi.fn<() => Promise<Record<string, ModelsDevModel>>>(),
   lookupModelMetadata: vi.fn<() => Promise<ModelsDevModel | null>>(),
 }));
 
 const { fetchModels } = await import("../src/fetcher");
-const { lookupModelMetadata, getAllModels } = await import("../src/openrouter");
-const { ensureCache } = await import("../src/modelsdev");
+const { lookupModelMetadata } = await import("../src/openrouter");
 
 const mockFetchModels = vi.mocked(fetchModels);
 const mockLookupModelMetadata = vi.mocked(lookupModelMetadata);
-const mockGetAllModels = vi.mocked(getAllModels);
-const mockEnsureCache = vi.mocked(ensureCache);
 
 const createMockInput = () => ({
   $: vi.fn<() => void>() as never,
@@ -51,8 +43,6 @@ const createMockInput = () => ({
 describe("LocalModelsPlugin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAllModels.mockResolvedValue([]);
-    mockEnsureCache.mockResolvedValue({});
   });
 
   it("discovers models from configured providers", async () => {
@@ -100,11 +90,11 @@ describe("LocalModelsPlugin", () => {
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:11434/v1",
       undefined,
-      undefined
+      undefined,
     );
     expect(config.provider["local-ollama"].models).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"]
+      config.provider["local-ollama"].models?.["llama3.3:70b"],
     ).toBeDefined();
   });
 
@@ -140,7 +130,7 @@ describe("LocalModelsPlugin", () => {
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:8080/v1",
       "sk-test-key",
-      undefined
+      undefined,
     );
   });
 
@@ -187,10 +177,10 @@ describe("LocalModelsPlugin", () => {
     }
 
     expect(
-      config.provider["local-ollama"].models?.["custom-model"]
+      config.provider["local-ollama"].models?.["custom-model"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"]
+      config.provider["local-ollama"].models?.["llama3.3:70b"],
     ).toBeDefined();
   });
 
@@ -225,12 +215,12 @@ describe("LocalModelsPlugin", () => {
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:11434/v1",
       undefined,
-      undefined
+      undefined,
     );
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:1234/v1",
       undefined,
-      undefined
+      undefined,
     );
   });
 
@@ -307,13 +297,13 @@ describe("LocalModelsPlugin", () => {
     }
 
     expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"]
+      config.provider["local-ollama"].models?.["llama3.3:70b"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["bge-embedding-v2"]
+      config.provider["local-ollama"].models?.["bge-embedding-v2"],
     ).toBeUndefined();
     expect(
-      config.provider["local-ollama"].models?.["nomic-embed-text"]
+      config.provider["local-ollama"].models?.["nomic-embed-text"],
     ).toBeUndefined();
   });
 
@@ -357,13 +347,13 @@ describe("LocalModelsPlugin", () => {
     }
 
     expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"]
+      config.provider["local-ollama"].models?.["qwen/qwen3"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3-coder"]
+      config.provider["local-ollama"].models?.["qwen/qwen3-coder"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["openai/gpt-4o"]
+      config.provider["local-ollama"].models?.["openai/gpt-4o"],
     ).toBeUndefined();
   });
 
@@ -408,13 +398,13 @@ describe("LocalModelsPlugin", () => {
     }
 
     expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"]
+      config.provider["local-ollama"].models?.["qwen/qwen3"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["qwen/test-model"]
+      config.provider["local-ollama"].models?.["qwen/test-model"],
     ).toBeUndefined();
     expect(
-      config.provider["local-ollama"].models?.["openai/gpt-4o"]
+      config.provider["local-ollama"].models?.["openai/gpt-4o"],
     ).toBeUndefined();
   });
 
@@ -462,10 +452,10 @@ describe("LocalModelsPlugin", () => {
     }
 
     expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"]
+      config.provider["local-ollama"].models?.["qwen/qwen3"],
     ).toBeDefined();
     expect(
-      config.provider["local-ollama"].models?.["bge-embedding"]
+      config.provider["local-ollama"].models?.["bge-embedding"],
     ).toBeDefined();
   });
 
@@ -513,7 +503,7 @@ describe("LocalModelsPlugin", () => {
       {
         "sleeve-base-url": "http://optiplex-3020:8081/v1",
         "sleeve-harness": "opencode",
-      }
+      },
     );
   });
 });
