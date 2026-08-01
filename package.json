@@ -21,21 +21,22 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "ultracite check",
-    "fix": "ultracite fix"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
     "@opencode-ai/plugin": "latest",
     "models-dev-db": "latest"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
-    "oxfmt": "^0.48.0",
-    "oxlint": "^1.63.0",
-    "typescript": "^5.7.0",
-    "ultracite": "^7.6.3",
-    "vitest": "^3.0.0"
+    "@types/node": "^26.1.2",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "typescript": "^7.0.2",
+    "ultracite": "^7.9.4",
+    "vitest": "^4.1.10"
   }
 }
