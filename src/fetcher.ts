@@ -35,7 +35,7 @@ export const fetchModels = async (
   }
 
   try {
-    const url = `${baseURL.replace(/\/$/, "")}/models`;
+    const url = `${baseURL.replace(/\/$/u, "")}/models`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -60,7 +60,7 @@ export const fetchModels = async (
       return [];
     }
 
-    const data: ModelsResponse = await response.json();
+    const data = (await response.json()) as ModelsResponse;
 
     if (!data.data || !Array.isArray(data.data)) {
       return [];

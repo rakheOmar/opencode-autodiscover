@@ -1,7 +1,7 @@
 const globToRegex = (pattern: string): RegExp => {
-  const escaped = pattern.replaceAll(/[.+^${}()|[\]\\]/g, "\\$&");
+  const escaped = pattern.replaceAll(/[.+^${}()|[\]\\]/gu, "\\$&");
   const regexStr = `^${escaped.replaceAll("*", ".*")}$`;
-  return new RegExp(regexStr, "i");
+  return new RegExp(regexStr, "iu");
 };
 
 export const matchesFilter = (

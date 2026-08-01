@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2024"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "declaration": true,
@@ -11,8 +12,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": ["node"],
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "exclude": ["node_modules", "dist", "tests"],
 }

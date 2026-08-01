@@ -70,28 +70,6 @@ API keys can be set via environment variables:
 export OPENCODE_LOCAL_MY_PROXY_API_KEY=sk-your-key
 ```
 
-### Model Overrides
-
-Override metadata for specific models:
-
-```json
-{
-  "provider": {
-    "local-ollama": {
-      "options": {
-        "baseURL": "http://localhost:11434/v1",
-        "modelOverrides": {
-          "my-custom-model": {
-            "contextWindow": 128000,
-            "maxOutput": 8192
-          }
-        }
-      }
-    }
-  }
-}
-```
-
 ### Model Filtering
 
 Control which models are discovered using `include` and `exclude` glob patterns inside `options`:
@@ -141,14 +119,12 @@ opencode plugin opencode-autodiscover --pure  # Run without external plugins
 
 ## Caching
 
-Metadata is cached locally for 24 hours:
+Metadata lookups are cached to keep startup fast:
 
-- **Location:** `~/.cache/opencode-autodiscover/`
-- **Files:**
-  - `openrouter.json` — OpenRouter metadata cache
-  - `modelsdev.json` — Models.dev metadata cache
+- **OpenRouter catalog** — written to `openrouter.json` under `~/.cache/opencode-autodiscover/` (24h TTL). Override the location with the `OPENCODE_AUTODISCOVER_CACHE_DIR` environment variable.
+- **Models.dev** — loaded in memory per process from the bundled `models-dev-db` package; rebuilt on each startup.
 
-Use the `refresh-local-models` tool to clear cache and re-fetch.
+Use the `refresh-local-models` tool to clear both caches and re-fetch, then restart OpenCode.
 
 ## Development
 

@@ -1,12 +1,15 @@
 import * as fs from "node:fs";
 import * as https from "node:https";
-import * as path from "node:path";
+import * as os from "node:os";
+import path from "node:path";
 
 import { normalizeModelId } from "./normalize.js";
-import type { OpenRouterModel, CacheEntry } from "./types.js";
+import type { CacheEntry, OpenRouterModel } from "./types.js";
+
+const REQUEST_TIMEOUT_MS = 10_000;
 
 const CACHE_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || "",
+  process.env.OPENCODE_AUTODISCOVER_CACHE_DIR || os.homedir(),
   ".cache",
   "opencode-autodiscover"
 );
@@ -17,49 +20,63 @@ let cachedModels: OpenRouterModel[] | null = null;
 
 export const clearCache = (): void => {
   cachedModels = null;
+  try {
+    fs.rmSync(CACHE_FILE, { force: true });
+  } catch {
+    // Ignore cache deletion errors
+  }
 };
 
-const fetchFromOpenRouter = (): Promise<OpenRouterModel[]> =>
-  // eslint-disable-next-line promise/avoid-new
-  new Promise((resolve) => {
-    let resolved = false;
-    const done = (models: OpenRouterModel[]): void => {
-      if (!resolved) {
-        resolved = true;
-        resolve(models);
-      }
-    };
+const fetchFromOpenRouter = (): Promise<OpenRouterModel[]> => {
+  const { promise, resolve } = Promise.withResolvers<OpenRouterModel[]>();
 
-    const req = https.get(
-      "https://openrouter.ai/api/v1/models",
-      { headers: { "Accept-Encoding": "identity" } },
-      (res) => {
-        if (res.statusCode !== 200) {
+  let resolved = false;
+
+  const done = (models: OpenRouterModel[]): void => {
+    if (!resolved) {
+      resolved = true;
+      resolve(models);
+    }
+  };
+
+  const req = https.get(
+    "https://openrouter.ai/api/v1/models",
+    { headers: { "Accept-Encoding": "identity" } },
+    (res) => {
+      if (res.statusCode !== 200) {
+        done([]);
+        return;
+      }
+
+      let data = "";
+      res.on("data", (chunk: string) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        try {
+          const json = JSON.parse(data);
+          done(json.data || []);
+        } catch {
           done([]);
-          return;
         }
+      });
+    }
+  );
 
-        let data = "";
-        res.on("data", (chunk: string) => {
-          data += chunk;
-        });
-        res.on("end", () => {
-          try {
-            const json = JSON.parse(data);
-            done(json.data || []);
-          } catch {
-            done([]);
-          }
-        });
-      }
-    );
+  const timeout = setTimeout(() => {
+    req.destroy();
+    done([]);
+  }, REQUEST_TIMEOUT_MS);
+  timeout.unref();
 
-    req.on("error", () => {
-      done([]);
-    });
-
-    req.end();
+  req.on("error", () => {
+    done([]);
   });
+
+  req.end();
+
+  return promise;
+};
 
 const readCache = (): OpenRouterModel[] | null => {
   if (cachedModels) {
@@ -125,17 +142,4 @@ export const lookupModelMetadata = async (
   });
 
   return match || null;
-};
-
-export const getAllModels = async (): Promise<OpenRouterModel[]> => {
-  let models = readCache();
-
-  if (!models) {
-    models = await fetchFromOpenRouter();
-    if (models.length > 0) {
-      writeCache(models);
-    }
-  }
-
-  return models;
 };

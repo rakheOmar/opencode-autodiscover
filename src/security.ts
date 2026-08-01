@@ -10,12 +10,12 @@ export const isValidUrl = (url: string): boolean => {
 };
 
 export const sanitizeModelId = (id: string): string =>
-  id.replaceAll(/[^a-zA-Z0-9/_\-:.]/g, "_");
+  id.replaceAll(/[^a-zA-Z0-9/_\-:.]/gu, "_");
 
 export const sanitizeErrorMessage = (error: unknown): string => {
   const message = error instanceof Error ? error.message : String(error);
   return message
-    .replaceAll(/Bearer\s+[^\s]+/gi, "Bearer [REDACTED]")
-    .replaceAll(/api[_-]?key[=:]\s*[^\s&]+/gi, "api_key=[REDACTED]")
-    .replaceAll(/sk-[a-zA-Z0-9]+/g, "sk-[REDACTED]");
+    .replaceAll(/Bearer\s+[^\s]+/giu, "Bearer [REDACTED]")
+    .replaceAll(/api[_-]?key[=:]\s*[^\s&]+/giu, "api_key=[REDACTED]")
+    .replaceAll(/sk-[a-zA-Z0-9]+/gu, "sk-[REDACTED]");
 };

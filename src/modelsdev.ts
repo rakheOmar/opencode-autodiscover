@@ -37,6 +37,3 @@ export const lookupModelMetadata = async (
 export const clearCache = (): void => {
   modelCache = null;
 };
-
-export const ensureCache = (): Promise<Record<string, ModelsDevModel>> =>
-  buildLookupMap();

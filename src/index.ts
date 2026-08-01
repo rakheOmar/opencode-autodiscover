@@ -4,12 +4,12 @@ import { tool } from "@opencode-ai/plugin";
 import { fetchModels } from "./fetcher.js";
 import { matchesFilter } from "./filter.js";
 import {
-  lookupModelMetadata as lookupModelsDevMetadata,
   clearCache as clearModelsDevCache,
+  lookupModelMetadata as lookupModelsDevMetadata,
 } from "./modelsdev.js";
 import {
-  lookupModelMetadata as lookupOpenRouterMetadata,
   clearCache as clearOpenRouterCache,
+  lookupModelMetadata as lookupOpenRouterMetadata,
 } from "./openrouter.js";
 import { sanitizeErrorMessage } from "./security.js";
 
@@ -123,18 +123,17 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
         return;
       }
 
-      for (const [providerId, providerConfig] of Object.entries(
-        config.provider
-      )) {
-        const provider = providerConfig as ProviderConfig;
-
+      const discoverProvider = async (
+        providerId: string,
+        provider: ProviderConfig
+      ): Promise<void> => {
         if (!isLocalProvider(provider)) {
-          continue;
+          return;
         }
 
         const baseURL = provider.options?.baseURL;
         if (!baseURL) {
-          continue;
+          return;
         }
 
         const apiKey = getApiKey(provider, providerId);
@@ -181,20 +180,26 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
             provider.models = {};
           }
 
-          for (const model of filteredModels) {
-            const [openrouterMetadata, modelsDevMetadata] = await Promise.all([
-              lookupOpenRouterMetadata(model.id),
-              lookupModelsDevMetadata(model.id),
-            ]);
+          const { models } = provider;
 
-            if (!provider.models[model.id]) {
-              provider.models[model.id] = buildModelConfig(
-                model,
-                openrouterMetadata,
-                modelsDevMetadata
+          await Promise.all(
+            filteredModels.map(async (model) => {
+              const [openrouterMetadata, modelsDevMetadata] = await Promise.all(
+                [
+                  lookupOpenRouterMetadata(model.id),
+                  lookupModelsDevMetadata(model.id),
+                ]
               );
-            }
-          }
+
+              if (!models[model.id]) {
+                models[model.id] = buildModelConfig(
+                  model,
+                  openrouterMetadata,
+                  modelsDevMetadata
+                );
+              }
+            })
+          );
 
           provider.npm = "@ai-sdk/openai-compatible";
           provider.api = baseURL;
@@ -215,7 +220,13 @@ export const LocalModelsPlugin: Plugin = async ({ client }) => {
             },
           });
         }
-      }
+      };
+
+      await Promise.all(
+        Object.entries(config.provider).map(([providerId, providerConfig]) =>
+          discoverProvider(providerId, providerConfig as ProviderConfig)
+        )
+      );
     },
     tool: {
       "refresh-local-models": tool({

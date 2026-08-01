@@ -1,18 +1,3 @@
-export interface LocalProviderConfig {
-  name?: string;
-  baseURL: string;
-  apiKey?: string;
-  modelOverrides?: Record<string, ModelOverride>;
-}
-
-export interface ModelOverride {
-  contextWindow?: number;
-  maxOutput?: number;
-  tool_call?: boolean;
-  reasoning?: boolean;
-  temperature?: boolean;
-}
-
 export interface DiscoveredModel {
   id: string;
   name: string;
@@ -37,19 +22,6 @@ export interface OpenRouterModel {
   supported_parameters: string[];
 }
 
-export interface OpenRouterResponse {
-  data: OpenRouterModel[];
-}
-
-export interface OpenAIModelResponse {
-  data: {
-    id: string;
-    object: string;
-    created: number;
-    owned_by?: string;
-  }[];
-}
-
 export interface CacheEntry {
   timestamp: number;
   models: OpenRouterModel[];
@@ -61,9 +33,4 @@ export interface ModelsDevModel {
   reasoning?: boolean;
   tool_call?: boolean;
   temperature?: boolean;
-}
-
-export interface ModelsDevCacheEntry {
-  timestamp: number;
-  models: Record<string, ModelsDevModel>;
 }

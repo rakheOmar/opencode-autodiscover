@@ -34,6 +34,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Validate version
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
