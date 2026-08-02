@@ -1,8 +1,8 @@
 .github/
 .agents/
+.zed/
 tests/
 plugin-manual-testing/
-oxfmt.config.ts
 oxlint.config.ts
 tsconfig.json
 tsconfig.build.json
