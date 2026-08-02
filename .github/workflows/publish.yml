@@ -9,8 +9,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quality:
+    name: Quality gate
+    uses: ./.github/workflows/quality-gate.yml
+
   publish:
     name: Publish
+    needs: quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,18 +30,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Lint
-        run: npm run check
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
-      - name: Typecheck
-        run: npm run typecheck
-
       - name: Validate version
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
@@ -48,4 +41,4 @@ jobs:
           echo "Publishing opencode-autodiscover@$PKG_VERSION"
 
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish --tag next --provenance --access public
