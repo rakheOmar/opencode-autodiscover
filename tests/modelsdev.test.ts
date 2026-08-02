@@ -79,7 +79,7 @@ describe(lookupModelMetadata, () => {
 
   it("includes cost data", async () => {
     const metadata = await lookupModelMetadata(
-      "anthropic/claude-sonnet-4-20250514",
+      "anthropic/claude-sonnet-4-20250514"
     );
     expect(metadata?.cost?.input).toBe(3);
     expect(metadata?.cost?.output).toBe(15);
@@ -87,7 +87,7 @@ describe(lookupModelMetadata, () => {
 
   it("includes reasoning and tool_call flags", async () => {
     const metadata = await lookupModelMetadata(
-      "anthropic/claude-sonnet-4-20250514",
+      "anthropic/claude-sonnet-4-20250514"
     );
     expect(metadata?.reasoning).toBeTruthy();
     expect(metadata?.tool_call).toBeTruthy();

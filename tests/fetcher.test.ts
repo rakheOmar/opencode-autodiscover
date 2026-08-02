@@ -31,7 +31,7 @@ describe(fetchModels, () => {
             owned_by: "ollama",
           },
         ],
-      }),
+      })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -51,7 +51,7 @@ describe(fetchModels, () => {
         headers: expect.objectContaining({
           Authorization: "Bearer sk-test-key",
         }),
-      }),
+      })
     );
   });
 
@@ -81,7 +81,7 @@ describe(fetchModels, () => {
 
   it("returns empty array when response format is invalid", async () => {
     mockFetch.mockResolvedValueOnce(
-      Response.json({ invalid: "format" }, { status: 200 }),
+      Response.json({ invalid: "format" }, { status: 200 })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -99,7 +99,7 @@ describe(fetchModels, () => {
             object: "model",
           },
         ],
-      }),
+      })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -117,7 +117,7 @@ describe(fetchModels, () => {
             object: "model",
           },
         ],
-      }),
+      })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -139,7 +139,7 @@ describe(fetchModels, () => {
             object: "model",
           },
         ],
-      }),
+      })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -159,7 +159,7 @@ describe(fetchModels, () => {
             supported_parameters: ["tools", "tool_choice", "temperature"],
           },
         ],
-      }),
+      })
     );
 
     const models = await fetchModels("http://localhost:11434/v1");
@@ -184,7 +184,7 @@ describe(fetchModels, () => {
           "sleeve-base-url": "http://localhost:8081/v1",
           "sleeve-harness": "opencode",
         }),
-      }),
+      })
     );
   });
 
@@ -202,7 +202,7 @@ describe(fetchModels, () => {
     await fetchModels(
       "http://localhost:11434/v1",
       "sk-real-key",
-      customHeaders,
+      customHeaders
     );
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -213,7 +213,7 @@ describe(fetchModels, () => {
           "Content-Type": "application/json",
           "x-custom": "should-pass",
         },
-      }),
+      })
     );
   });
 
@@ -234,7 +234,7 @@ describe(fetchModels, () => {
           "x-flag": "true",
           "x-name": "already-string",
         }),
-      }),
+      })
     );
   });
 
@@ -244,7 +244,7 @@ describe(fetchModels, () => {
     await fetchModels(
       "http://localhost:11434/v1",
       undefined,
-      "not-an-object" as never,
+      "not-an-object" as never
     );
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -253,7 +253,7 @@ describe(fetchModels, () => {
         headers: {
           "Content-Type": "application/json",
         },
-      }),
+      })
     );
   });
 });

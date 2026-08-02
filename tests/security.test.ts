@@ -27,7 +27,7 @@ describe(isValidUrl, () => {
 describe(sanitizeModelId, () => {
   it("preserves safe characters", () => {
     expect(sanitizeModelId("qwen/qwen3-32b:latest")).toBe(
-      "qwen/qwen3-32b:latest",
+      "qwen/qwen3-32b:latest"
     );
   });
 
@@ -39,19 +39,19 @@ describe(sanitizeModelId, () => {
 describe(sanitizeErrorMessage, () => {
   it("redacts bearer tokens", () => {
     expect(
-      sanitizeErrorMessage(new Error("Unauthorized: Bearer sk-abc12345")),
+      sanitizeErrorMessage(new Error("Unauthorized: Bearer sk-abc12345"))
     ).toBe("Unauthorized: Bearer [REDACTED]");
   });
 
   it("redacts api key query parameters", () => {
     expect(
-      sanitizeErrorMessage("Request failed with api_key=sk-abc12345&retry=1"),
+      sanitizeErrorMessage("Request failed with api_key=sk-abc12345&retry=1")
     ).toBe("Request failed with api_key=[REDACTED]&retry=1");
   });
 
   it("redacts bare sk- keys", () => {
     expect(sanitizeErrorMessage("Invalid key sk-abc12345 supplied")).toBe(
-      "Invalid key sk-[REDACTED] supplied",
+      "Invalid key sk-[REDACTED] supplied"
     );
   });
 

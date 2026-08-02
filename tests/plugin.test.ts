@@ -20,490 +20,386 @@ vi.mock(import("../src/modelsdev"), () => ({
   lookupModelMetadata: vi.fn<() => Promise<ModelsDevModel | null>>(),
 }));
 
+const { default: plugin } = await import("../src/index");
 const { fetchModels } = await import("../src/fetcher");
-const { lookupModelMetadata } = await import("../src/openrouter");
+const {
+  clearCache: clearOpenRouterCache,
+  lookupModelMetadata: lookupOpenRouterMetadata,
+} = await import("../src/openrouter");
+const {
+  clearCache: clearModelsDevCache,
+  lookupModelMetadata: lookupModelsDevMetadata,
+} = await import("../src/modelsdev");
 
 const mockFetchModels = vi.mocked(fetchModels);
-const mockLookupModelMetadata = vi.mocked(lookupModelMetadata);
+const mockLookupOpenRouterMetadata = vi.mocked(lookupOpenRouterMetadata);
+const mockLookupModelsDevMetadata = vi.mocked(lookupModelsDevMetadata);
+const mockClearOpenRouterCache = vi.mocked(clearOpenRouterCache);
+const mockClearModelsDevCache = vi.mocked(clearModelsDevCache);
 
-const createMockInput = () => ({
-  $: vi.fn<() => void>() as never,
-  client: {
-    app: { log: vi.fn<() => void>() },
-  } as never,
-  directory: "/test",
-  experimental_workspace: {
-    register: vi.fn<() => void>(),
-  },
-  project: {} as never,
-  serverUrl: new URL("http://localhost:3000"),
-  worktree: "/test",
-});
+const createModel = (id: string): DiscoveredModel => ({ id, name: id });
 
-describe("LocalModelsPlugin", () => {
+const createEndpoint = (
+  id: string,
+  baseURL: string,
+  extra: Record<string, unknown> = {}
+) => ({ baseURL, id, ...extra });
+
+interface ProviderDraft {
+  name: string;
+  package: string;
+  settings: Record<string, unknown>;
+}
+
+interface ModelDraft {
+  capabilities: { input: string[]; output: string[]; tools: boolean };
+  cost: unknown[];
+  enabled: boolean;
+  id: string;
+  limit: { context: number; output: number };
+  name: string;
+}
+
+interface RefreshTool {
+  name: string;
+  description: string;
+  execute: (
+    input: unknown,
+    context: unknown
+  ) => Promise<{ content?: string; output?: unknown }>;
+}
+
+const createMockContext = (options: Readonly<Record<string, unknown>> = {}) => {
+  const providerDraft: ProviderDraft = { name: "", package: "", settings: {} };
+  const modelDraft: ModelDraft = {
+    capabilities: { input: [], output: [], tools: false },
+    cost: [],
+    enabled: false,
+    id: "",
+    limit: { context: 0, output: 0 },
+    name: "",
+  };
+
+  const catalog = {
+    model: {
+      get: vi.fn<(_providerId: string, _modelId: string) => unknown>(
+        (_providerId, _modelId) => {}
+      ),
+      update: vi.fn<
+        (
+          providerId: string,
+          modelId: string,
+          update: (draft: ModelDraft) => void
+        ) => void
+      >((_providerId, _modelId, update) => {
+        update(modelDraft);
+      }),
+    },
+    provider: {
+      update: vi.fn<
+        (id: string, update: (draft: ProviderDraft) => void) => void
+      >((_id, update) => {
+        update(providerDraft);
+      }),
+    },
+  };
+  let applyTransform: ((draft: typeof catalog) => void) | undefined;
+  // Mirrors the server: registration stores the callback; reload() replays it.
+  const catalogTransform = vi.fn<
+    (callback: (draft: typeof catalog) => void) => Promise<{
+      dispose: () => void;
+    }>
+  >((callback) => {
+    applyTransform = callback;
+    return Promise.resolve({ dispose: vi.fn<() => void>() });
+  });
+  const reload = vi.fn<() => Promise<void>>(() => {
+    if (applyTransform) {
+      applyTransform(catalog);
+    }
+    return Promise.resolve();
+  });
+
+  const toolDraft = { add: vi.fn<(tool: RefreshTool) => void>() };
+  // The server applies tool transforms at registration; the mock must too.
+  const toolTransform = vi.fn<
+    (callback: (draft: typeof toolDraft) => void) => Promise<{
+      dispose: () => void;
+    }>
+  >((callback) => {
+    callback(toolDraft);
+    return Promise.resolve({ dispose: vi.fn<() => void>() });
+  });
+
+  return {
+    catalog,
+    ctx: {
+      catalog: { reload, transform: catalogTransform },
+      options,
+      tool: { transform: toolTransform },
+    } as never,
+    modelDraft,
+    providerDraft,
+    reload,
+    toolDraft,
+  };
+};
+
+describe("autodiscover plugin (v2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("discovers models from configured providers", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
+  it("registers providers and models from configured endpoints", async () => {
     mockFetchModels.mockResolvedValue([
-      { id: "llama3.3:70b", name: "llama3.3:70b" },
+      createModel("llama3.3:70b"),
+      createModel("qwen2.5:7b"),
     ]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
 
-    mockLookupModelMetadata.mockResolvedValue({
-      context_length: 131_072,
-      id: "meta-llama/llama-3.3-70b-instruct",
-      name: "Meta: Llama 3.3 70B Instruct",
-      supported_parameters: ["tools", "temperature"],
-      top_provider: { max_completion_tokens: 16_384 },
+    const { catalog, ctx, modelDraft, providerDraft, reload } =
+      createMockContext({
+        endpoints: [createEndpoint("ollama", "http://localhost:11434/v1")],
+      });
+
+    await plugin.setup(ctx);
+
+    expect(providerDraft).toMatchObject({
+      package: "@ai-sdk/openai-compatible",
+      settings: { baseURL: "http://localhost:11434/v1" },
+    });
+    expect(
+      catalog.model.update.mock.calls.map(([providerId, modelId]) => [
+        providerId,
+        modelId,
+      ])
+    ).toStrictEqual([
+      ["ollama", "llama3.3:70b"],
+      ["ollama", "qwen2.5:7b"],
+    ]);
+    expect(modelDraft).toMatchObject({ enabled: true, name: "qwen2.5:7b" });
+    expect(mockFetchModels).toHaveBeenCalledWith(
+      "http://localhost:11434/v1",
+      undefined,
+      undefined
+    );
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("passes API key and custom headers to fetchModels and provider settings", async () => {
+    mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { ctx, providerDraft } = createMockContext({
+      endpoints: [
+        createEndpoint("lmstudio", "http://localhost:1234/v1", {
+          apiKey: "sk-abc",
+          headers: { "x-custom": "1" },
+        }),
+      ],
     });
 
-    const config = {
-      provider: {
-        "local-ollama": {
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1",
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
+    await plugin.setup(ctx);
 
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(mockFetchModels).toHaveBeenCalledWith(
-      "http://localhost:11434/v1",
-      undefined,
-      undefined,
-    );
-    expect(config.provider["local-ollama"].models).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"],
-    ).toBeDefined();
-  });
-
-  it("uses API key from config", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([]);
-
-    const config = {
-      provider: {
-        "local-proxy": {
-          name: "Proxy",
-          options: {
-            apiKey: "sk-test-key",
-            baseURL: "http://localhost:8080/v1",
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        { name: string; options: { apiKey: string; baseURL: string } }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(mockFetchModels).toHaveBeenCalledWith(
-      "http://localhost:8080/v1",
-      "sk-test-key",
-      undefined,
-    );
-  });
-
-  it("merges discovered models with existing config models", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([
-      { id: "llama3.3:70b", name: "llama3.3:70b" },
-    ]);
-
-    mockLookupModelMetadata.mockResolvedValue(null);
-
-    const config = {
-      provider: {
-        "local-ollama": {
-          models: {
-            "custom-model": {
-              limit: { context: 128_000, output: 8192 },
-              name: "Custom Model",
-            },
-          },
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1",
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(
-      config.provider["local-ollama"].models?.["custom-model"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"],
-    ).toBeDefined();
-  });
-
-  it("handles multiple providers", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([]);
-
-    const config = {
-      provider: {
-        "local-lmstudio": {
-          name: "LM Studio",
-          options: { baseURL: "http://localhost:1234/v1" },
-        },
-        "local-ollama": {
-          name: "Ollama",
-          options: { baseURL: "http://localhost:11434/v1" },
-        },
-      },
-    } as Record<
-      string,
-      Record<string, { name: string; options: { baseURL: string } }>
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(mockFetchModels).toHaveBeenCalledTimes(2);
-    expect(mockFetchModels).toHaveBeenCalledWith(
-      "http://localhost:11434/v1",
-      undefined,
-      undefined,
-    );
     expect(mockFetchModels).toHaveBeenCalledWith(
       "http://localhost:1234/v1",
-      undefined,
-      undefined,
+      "sk-abc",
+      { "x-custom": "1" }
+    );
+    expect(providerDraft.settings).toStrictEqual({
+      apiKey: "sk-abc",
+      baseURL: "http://localhost:1234/v1",
+      headers: { "x-custom": "1" },
+    });
+  });
+
+  it("falls back to the OPENCODE_LOCAL_<ID>_API_KEY environment variable", async () => {
+    process.env.OPENCODE_LOCAL_LM_STUDIO_API_KEY = "sk-env";
+    try {
+      mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+      mockLookupOpenRouterMetadata.mockResolvedValue(null);
+      mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+      const { ctx, providerDraft } = createMockContext({
+        endpoints: [createEndpoint("lm-studio", "http://localhost:1234/v1")],
+      });
+
+      await plugin.setup(ctx);
+
+      expect(mockFetchModels).toHaveBeenCalledWith(
+        "http://localhost:1234/v1",
+        "sk-env",
+        undefined
+      );
+      expect(providerDraft.settings).toMatchObject({ apiKey: "sk-env" });
+    } finally {
+      delete process.env.OPENCODE_LOCAL_LM_STUDIO_API_KEY;
+    }
+  });
+
+  it("applies include and exclude patterns before registering models", async () => {
+    mockFetchModels.mockResolvedValue([
+      createModel("llama3.3:70b"),
+      createModel("qwen2.5:7b"),
+      createModel("embedding-model"),
+    ]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { catalog, ctx } = createMockContext({
+      endpoints: [
+        createEndpoint("ollama", "http://localhost:11434/v1", {
+          exclude: ["embedding-*"],
+          include: ["*:70b", "qwen2.5:*"],
+        }),
+      ],
+    });
+
+    await plugin.setup(ctx);
+
+    expect(catalog.model.update).toHaveBeenCalledTimes(2);
+    expect(catalog.model.update).toHaveBeenCalledWith(
+      "ollama",
+      "llama3.3:70b",
+      expect.any(Function)
+    );
+    expect(catalog.model.update).toHaveBeenCalledWith(
+      "ollama",
+      "qwen2.5:7b",
+      expect.any(Function)
+    );
+    expect(catalog.model.update).not.toHaveBeenCalledWith(
+      "ollama",
+      "embedding-model",
+      expect.any(Function)
     );
   });
 
-  it("continues with empty models when endpoint is unreachable", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
+  it("does nothing when no endpoints are configured", async () => {
+    const { catalog, ctx, reload, toolDraft } = createMockContext({});
 
-    mockFetchModels.mockResolvedValue([]);
+    await plugin.setup(ctx);
 
-    const config = {
-      provider: {
-        "local-ollama": {
-          name: "Ollama",
-          options: { baseURL: "http://localhost:11434/v1" },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(config.provider["local-ollama"].models).toStrictEqual({});
+    expect(catalog.provider.update).not.toHaveBeenCalled();
+    expect(catalog.model.update).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(toolDraft.add).not.toHaveBeenCalled();
+    expect(mockFetchModels).not.toHaveBeenCalled();
   });
 
-  it("excludes models matching exclude patterns", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
+  it("skips endpoints with invalid id or baseURL", async () => {
+    mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
 
-    mockFetchModels.mockResolvedValue([
-      { id: "llama3.3:70b", name: "llama3.3:70b" },
-      { id: "bge-embedding-v2", name: "bge-embedding-v2" },
-      { id: "nomic-embed-text", name: "nomic-embed-text" },
-    ]);
+    const { catalog, ctx } = createMockContext({
+      endpoints: [
+        createEndpoint("bad", "not a url"),
+        createEndpoint("", "http://localhost:1/v1"),
+        createEndpoint("ok", "http://localhost:11434/v1"),
+      ],
+    });
 
-    mockLookupModelMetadata.mockResolvedValue(null);
+    await plugin.setup(ctx);
 
-    const config = {
-      provider: {
-        "local-ollama": {
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1",
-            exclude: ["*embedding*", "*embed*"],
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string; exclude?: string[] };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(
-      config.provider["local-ollama"].models?.["llama3.3:70b"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["bge-embedding-v2"],
-    ).toBeUndefined();
-    expect(
-      config.provider["local-ollama"].models?.["nomic-embed-text"],
-    ).toBeUndefined();
-  });
-
-  it("includes only models matching include patterns", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([
-      { id: "qwen/qwen3", name: "qwen/qwen3" },
-      { id: "openai/gpt-4o", name: "openai/gpt-4o" },
-      { id: "qwen/qwen3-coder", name: "qwen/qwen3-coder" },
-    ]);
-
-    mockLookupModelMetadata.mockResolvedValue(null);
-
-    const config = {
-      provider: {
-        "local-ollama": {
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1",
-            include: ["qwen/*"],
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string; include?: string[] };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3-coder"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["openai/gpt-4o"],
-    ).toBeUndefined();
-  });
-
-  it("exclude carves out of include pool", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([
-      { id: "qwen/qwen3", name: "qwen/qwen3" },
-      { id: "qwen/test-model", name: "qwen/test-model" },
-      { id: "openai/gpt-4o", name: "openai/gpt-4o" },
-    ]);
-
-    mockLookupModelMetadata.mockResolvedValue(null);
-
-    const config = {
-      provider: {
-        "local-ollama": {
-          name: "Ollama",
-          options: {
-            baseURL: "http://localhost:11434/v1",
-            exclude: ["*test*"],
-            include: ["qwen/*"],
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string; include?: string[]; exclude?: string[] };
-          models?: Record<string, unknown>;
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["qwen/test-model"],
-    ).toBeUndefined();
-    expect(
-      config.provider["local-ollama"].models?.["openai/gpt-4o"],
-    ).toBeUndefined();
-  });
-
-  it("preserves explicitly configured models even when filter would exclude them", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([
-      { id: "qwen/qwen3", name: "qwen/qwen3" },
-      { id: "bge-embedding", name: "bge-embedding" },
-    ]);
-
-    mockLookupModelMetadata.mockResolvedValue(null);
-
-    const config = {
-      provider: {
-        "local-ollama": {
-          exclude: ["*embedding*"],
-          models: {
-            "bge-embedding": {
-              limit: { context: 8192, output: 1024 },
-              name: "My Embedding Model",
-            },
-          },
-          name: "Ollama",
-          options: { baseURL: "http://localhost:11434/v1" },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: { baseURL: string };
-          models?: Record<string, unknown>;
-          exclude?: string[];
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
-    expect(
-      config.provider["local-ollama"].models?.["qwen/qwen3"],
-    ).toBeDefined();
-    expect(
-      config.provider["local-ollama"].models?.["bge-embedding"],
-    ).toBeDefined();
-  });
-
-  it("passes custom headers from provider options to fetchModels", async () => {
-    const { LocalModelsPlugin } = await import("../src/index");
-
-    mockFetchModels.mockResolvedValue([]);
-
-    const config = {
-      provider: {
-        "local-proxy": {
-          name: "Proxy",
-          options: {
-            baseURL: "http://localhost:8081/v1",
-            headers: {
-              "sleeve-base-url": "http://optiplex-3020:8081/v1",
-              "sleeve-harness": "opencode",
-            },
-          },
-        },
-      },
-    } as Record<
-      string,
-      Record<
-        string,
-        {
-          name: string;
-          options: {
-            baseURL: string;
-            headers?: Record<string, string>;
-          };
-        }
-      >
-    >;
-
-    const hooks = await LocalModelsPlugin(createMockInput());
-
-    if (hooks.config) {
-      await hooks.config(config as never);
-    }
-
+    expect(catalog.provider.update).toHaveBeenCalledOnce();
     expect(mockFetchModels).toHaveBeenCalledWith(
-      "http://localhost:8081/v1",
+      "http://localhost:11434/v1",
       undefined,
-      {
-        "sleeve-base-url": "http://optiplex-3020:8081/v1",
-        "sleeve-harness": "opencode",
-      },
+      undefined
     );
+  });
+
+  it("preserves models already defined by the user", async () => {
+    mockFetchModels.mockResolvedValue([
+      createModel("custom-model"),
+      createModel("llama3.3:70b"),
+    ]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { catalog, ctx } = createMockContext({
+      endpoints: [createEndpoint("ollama", "http://localhost:11434/v1")],
+    });
+    catalog.model.get.mockImplementation(
+      (_providerId: string, modelId: string) =>
+        modelId === "custom-model" ? { id: "custom-model" } : undefined
+    );
+
+    await plugin.setup(ctx);
+
+    expect(catalog.model.update).toHaveBeenCalledExactlyOnceWith(
+      "ollama",
+      "llama3.3:70b",
+      expect.any(Function)
+    );
+    expect(catalog.model.update).not.toHaveBeenCalledWith(
+      "ollama",
+      "custom-model",
+      expect.any(Function)
+    );
+  });
+
+  it("enriches model limits with OpenRouter metadata and cost with Models.dev", async () => {
+    mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue({
+      context_length: 131_072,
+      top_provider: { max_completion_tokens: 8192 },
+    } as OpenRouterModel);
+    mockLookupModelsDevMetadata.mockResolvedValue({
+      cost: { cache_read: 0.25, input: 0.5, output: 1 },
+    } as ModelsDevModel);
+
+    const { ctx, modelDraft } = createMockContext({
+      endpoints: [createEndpoint("ollama", "http://localhost:11434/v1")],
+    });
+
+    await plugin.setup(ctx);
+
+    expect(modelDraft.limit).toStrictEqual({ context: 131_072, output: 8192 });
+    expect(modelDraft.cost).toStrictEqual([
+      { cache: { read: 0.25, write: 0 }, input: 0.5, output: 1 },
+    ]);
+    expect(modelDraft.capabilities.tools).toBeFalsy();
+  });
+
+  it("registers the refresh tool", async () => {
+    mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { ctx, toolDraft } = createMockContext({
+      endpoints: [createEndpoint("ollama", "http://localhost:11434/v1")],
+    });
+
+    await plugin.setup(ctx);
+
+    expect(toolDraft.add).toHaveBeenCalledOnce();
+    const [[tool]] = toolDraft.add.mock.calls;
+    expect(tool.name).toBe("refresh-local-models");
+    expect(tool.execute).toBeTypeOf("function");
+  });
+
+  it("refresh tool clears caches, re-discovers, and replays the catalog", async () => {
+    mockFetchModels.mockResolvedValue([createModel("llama3.3:70b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { ctx, reload, toolDraft } = createMockContext({
+      endpoints: [createEndpoint("ollama", "http://localhost:11434/v1")],
+    });
+
+    await plugin.setup(ctx);
+    const [[tool]] = toolDraft.add.mock.calls;
+
+    const result = await tool.execute({}, {});
+
+    expect(mockClearOpenRouterCache).toHaveBeenCalledOnce();
+    expect(mockClearModelsDevCache).toHaveBeenCalledOnce();
+    expect(mockFetchModels).toHaveBeenCalledTimes(2);
+    expect(reload).toHaveBeenCalledTimes(2);
+    expect(result.content).toContain("refreshed");
   });
 });

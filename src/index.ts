@@ -1,5 +1,5 @@
-import type { Plugin } from "@opencode-ai/plugin";
-import { tool } from "@opencode-ai/plugin";
+import type { Model } from "@opencode-ai/plugin";
+import { Plugin } from "@opencode-ai/plugin";
 
 import { fetchModels } from "./fetcher.js";
 import { matchesFilter } from "./filter.js";
@@ -11,235 +11,235 @@ import {
   clearCache as clearOpenRouterCache,
   lookupModelMetadata as lookupOpenRouterMetadata,
 } from "./openrouter.js";
-import { sanitizeErrorMessage } from "./security.js";
+import { isValidUrl } from "./security.js";
+import type {
+  DiscoveredModel,
+  ModelsDevModel,
+  OpenRouterModel,
+} from "./types.js";
 
-interface ProviderConfig {
+const PROVIDER_PACKAGE = "@ai-sdk/openai-compatible";
+
+interface EndpointConfig {
+  id: string;
+  baseURL: string;
   name?: string;
-  options?: {
-    baseURL?: string;
-    apiKey?: string;
-    include?: string[];
-    exclude?: string[];
-    [key: string]: unknown;
-  };
-  models?: Record<string, unknown>;
-  [key: string]: unknown;
+  apiKey?: string;
+  headers?: Record<string, string>;
+  include?: string[];
+  exclude?: string[];
 }
 
-const isLocalProvider = (provider: ProviderConfig): boolean =>
-  !!provider.options?.baseURL;
+interface EnrichedModel {
+  model: DiscoveredModel;
+  openrouter: OpenRouterModel | null;
+  modelsdev: ModelsDevModel | null;
+}
 
-const getApiKey = (
-  provider: ProviderConfig,
-  providerId: string
-): string | undefined => {
-  if (provider.options?.apiKey) {
-    return provider.options.apiKey;
+interface EndpointResult {
+  endpoint: EndpointConfig;
+  models: EnrichedModel[];
+}
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+// Backward-compatible env fallback: OPENCODE_LOCAL_<ID>_API_KEY.
+const apiKeyFromEnvironment = (id: string): string | undefined =>
+  process.env[
+    `OPENCODE_LOCAL_${id.toUpperCase().replaceAll("-", "_")}_API_KEY`
+  ];
+
+const parseEndpoints = (
+  options: Readonly<Record<string, unknown>>
+): EndpointConfig[] => {
+  if (!Array.isArray(options.endpoints)) {
+    return [];
   }
 
-  const envKey = `OPENCODE_LOCAL_${providerId.toUpperCase().replaceAll("-", "_")}_API_KEY`;
-  return process.env[envKey];
+  const endpoints: EndpointConfig[] = [];
+  for (const entry of options.endpoints) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const { baseURL, id } = record;
+    if (typeof id !== "string" || id.length === 0) {
+      continue;
+    }
+    if (typeof baseURL !== "string" || !isValidUrl(baseURL)) {
+      continue;
+    }
+
+    const endpoint: EndpointConfig = { baseURL, id };
+    if (typeof record.name === "string") {
+      endpoint.name = record.name;
+    }
+    if (typeof record.apiKey === "string") {
+      endpoint.apiKey = record.apiKey;
+    }
+    if (record.headers && typeof record.headers === "object") {
+      const headers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(record.headers)) {
+        if (typeof value === "string") {
+          headers[key] = value;
+        }
+      }
+      if (Object.keys(headers).length > 0) {
+        endpoint.headers = headers;
+      }
+    }
+    if (isStringArray(record.include)) {
+      endpoint.include = record.include;
+    }
+    if (isStringArray(record.exclude)) {
+      endpoint.exclude = record.exclude;
+    }
+    endpoints.push(endpoint);
+  }
+  return endpoints;
 };
 
-const buildModelLimit = (
-  model: { contextWindow?: number; maxOutput?: number },
-  metadata: {
-    context_length: number;
-    top_provider: { max_completion_tokens: number | null };
-  } | null
-) => {
+const buildLimit = (
+  model: DiscoveredModel,
+  openrouter: OpenRouterModel | null
+): { context: number; output: number } => {
   if (model.contextWindow || model.maxOutput) {
     return {
       context: model.contextWindow || 32_768,
       output: model.maxOutput || 4096,
     };
   }
-  if (metadata) {
+  if (openrouter) {
     return {
-      context: metadata.context_length,
-      output: metadata.top_provider.max_completion_tokens || 4096,
+      context: openrouter.context_length,
+      output: openrouter.top_provider.max_completion_tokens || 4096,
     };
   }
   return { context: 32_768, output: 4096 };
 };
 
-const buildModelConfig = (
-  model: {
-    id: string;
-    name: string;
-    contextWindow?: number;
-    maxOutput?: number;
-    tool_call?: boolean;
-    reasoning?: boolean;
-    temperature?: boolean;
-  },
-  openrouterMetadata: {
-    name: string;
-    context_length: number;
-    top_provider: { max_completion_tokens: number | null };
-  } | null,
-  modelsDevMetadata: {
-    limit: { context: number; output: number };
-    cost?: { input: number; output: number };
-    reasoning?: boolean;
-    tool_call?: boolean;
-    temperature?: boolean;
-  } | null
-): Record<string, unknown> => {
-  const config: Record<string, unknown> = {
-    limit: buildModelLimit(model, openrouterMetadata),
-    name: model.name,
+const buildCost = (
+  cost: NonNullable<ModelsDevModel["cost"]>
+): Model.Info["cost"][number] => {
+  const value = {
+    cache: { read: cost.cache_read ?? 0, write: 0 },
+    input: cost.input,
+    output: cost.output,
   };
-
-  if (modelsDevMetadata?.cost) {
-    config.cost = modelsDevMetadata.cost;
-  }
-
-  if (model.tool_call || modelsDevMetadata?.tool_call) {
-    config.tool_call = true;
-  }
-  if (model.reasoning || modelsDevMetadata?.reasoning) {
-    config.reasoning = true;
-  }
-  if (model.temperature || modelsDevMetadata?.temperature) {
-    config.temperature = true;
-  }
-
-  return config;
+  // Models.dev cost is unbranded; the catalog cost schema brands money fields.
+  return value as Model.Info["cost"][number];
 };
 
-export const LocalModelsPlugin: Plugin = async ({ client }) => {
-  await client.app.log({
-    body: {
-      level: "info",
-      message: "Plugin initialized",
-      service: "opencode-autodiscover",
-    },
-  });
+export default Plugin.define({
+  id: "opencode.autodiscover",
+  setup: async (ctx) => {
+    const endpoints = parseEndpoints(ctx.options).map((endpoint) => ({
+      ...endpoint,
+      apiKey: endpoint.apiKey ?? apiKeyFromEnvironment(endpoint.id),
+    }));
+    if (endpoints.length === 0) {
+      return;
+    }
 
-  return {
-    config: async (config) => {
-      if (!config.provider) {
-        return;
-      }
+    // Model IDs managed by this plugin per provider; user-defined models win.
+    const managed = new Map<string, Set<string>>();
+    let results: EndpointResult[] = [];
 
-      const discoverProvider = async (
-        providerId: string,
-        provider: ProviderConfig
-      ): Promise<void> => {
-        if (!isLocalProvider(provider)) {
-          return;
-        }
+    await ctx.catalog.transform((catalog) => {
+      for (const { endpoint, models } of results) {
+        catalog.provider.update(endpoint.id, (provider) => {
+          provider.name = endpoint.name || provider.name;
+          provider.package = PROVIDER_PACKAGE;
+          provider.settings = {
+            ...provider.settings,
+            baseURL: endpoint.baseURL,
+            ...(endpoint.apiKey ? { apiKey: endpoint.apiKey } : {}),
+            ...(endpoint.headers ? { headers: endpoint.headers } : {}),
+          };
+        });
 
-        const baseURL = provider.options?.baseURL;
-        if (!baseURL) {
-          return;
-        }
-
-        const apiKey = getApiKey(provider, providerId);
-        const customHeaders = provider.options?.headers as
-          | Record<string, unknown>
-          | undefined;
-
-        try {
-          await client.app.log({
-            body: {
-              level: "info",
-              message: `Discovering models from ${providerId} at ${baseURL}`,
-              service: "opencode-autodiscover",
-            },
-          });
-
-          const discoveredModels = await fetchModels(
-            baseURL,
-            apiKey,
-            customHeaders
-          );
-
-          const include = provider.options?.include || [];
-          const exclude = provider.options?.exclude || [];
-
-          const filteredModels = discoveredModels.filter((model) => {
-            const allowed = matchesFilter(model.id, include, exclude);
-            if (!allowed) {
-              const matched = exclude.find((p) =>
-                matchesFilter(model.id, [], [p])
-              );
-              void client.app.log({
-                body: {
-                  level: "info",
-                  message: `Excluded model: ${model.id} (matched pattern: ${matched})`,
-                  service: "opencode-autodiscover",
-                },
-              });
-            }
-            return allowed;
-          });
-
-          if (!provider.models) {
-            provider.models = {};
+        const managedForProvider =
+          managed.get(endpoint.id) ?? new Set<string>();
+        for (const enriched of models) {
+          if (
+            catalog.model.get(endpoint.id, enriched.model.id) &&
+            !managedForProvider.has(enriched.model.id)
+          ) {
+            continue;
           }
 
-          const { models } = provider;
+          catalog.model.update(endpoint.id, enriched.model.id, (draft) => {
+            draft.capabilities = {
+              input: [],
+              output: [],
+              tools: Boolean(enriched.model.tool_call),
+            };
+            draft.enabled = true;
+            draft.limit = buildLimit(
+              enriched.model,
+              enriched.openrouter
+            ) as Model.Info["limit"];
+            draft.name = enriched.model.name;
+            if (enriched.modelsdev?.cost) {
+              draft.cost = [buildCost(enriched.modelsdev.cost)];
+            }
+          });
 
-          await Promise.all(
-            filteredModels.map(async (model) => {
-              const [openrouterMetadata, modelsDevMetadata] = await Promise.all(
-                [
-                  lookupOpenRouterMetadata(model.id),
-                  lookupModelsDevMetadata(model.id),
-                ]
-              );
+          managedForProvider.add(enriched.model.id);
+        }
+        managed.set(endpoint.id, managedForProvider);
+      }
+    });
 
-              if (!models[model.id]) {
-                models[model.id] = buildModelConfig(
-                  model,
-                  openrouterMetadata,
-                  modelsDevMetadata
-                );
-              }
+    const refresh = async (): Promise<void> => {
+      results = await Promise.all(
+        endpoints.map(async (endpoint): Promise<EndpointResult> => {
+          const discoveredModels = await fetchModels(
+            endpoint.baseURL,
+            endpoint.apiKey,
+            endpoint.headers
+          );
+          const filtered = discoveredModels.filter((model) =>
+            matchesFilter(
+              model.id,
+              endpoint.include ?? [],
+              endpoint.exclude ?? []
+            )
+          );
+          const models = await Promise.all(
+            filtered.map(async (model): Promise<EnrichedModel> => {
+              const [openrouter, modelsdev] = await Promise.all([
+                lookupOpenRouterMetadata(model.id),
+                lookupModelsDevMetadata(model.id),
+              ]);
+              return { model, modelsdev, openrouter };
             })
           );
-
-          provider.npm = "@ai-sdk/openai-compatible";
-          provider.api = baseURL;
-
-          await client.app.log({
-            body: {
-              level: "info",
-              message: `Discovered ${filteredModels.length} models from ${providerId}`,
-              service: "opencode-autodiscover",
-            },
-          });
-        } catch (error) {
-          await client.app.log({
-            body: {
-              level: "warn",
-              message: `Failed to discover models from ${providerId}: ${sanitizeErrorMessage(error)}`,
-              service: "opencode-autodiscover",
-            },
-          });
-        }
-      };
-
-      await Promise.all(
-        Object.entries(config.provider).map(([providerId, providerConfig]) =>
-          discoverProvider(providerId, providerConfig as ProviderConfig)
-        )
+          return { endpoint, models };
+        })
       );
-    },
-    tool: {
-      "refresh-local-models": tool({
-        args: {},
-        description: "Refresh models from local API endpoints",
-        // eslint-disable-next-line require-await
-        async execute(_args, _context) {
+      await ctx.catalog.reload();
+    };
+
+    await refresh();
+
+    await ctx.tool.transform((tools) => {
+      tools.add({
+        description: "Refresh models from local OpenAI-compatible endpoints",
+        execute: async () => {
           clearOpenRouterCache();
           clearModelsDevCache();
-
-          return "Models refreshed. Please restart OpenCode to pick up new models.";
+          await refresh();
+          return { content: "Models refreshed from local endpoints." };
         },
-      }),
-    },
-  };
-};
+        input: {
+          additionalProperties: false,
+          properties: {},
+          type: "object",
+        },
+        name: "refresh-local-models",
+      });
+    });
+  },
+});

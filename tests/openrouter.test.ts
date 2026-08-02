@@ -30,7 +30,7 @@ vi.mock(import("node:https"), () => ({
 // Cache dir is derived from the env var at module load, so it must be set
 // before the module under test is imported (done via beforeAll below).
 const CACHE_DIR_ROOT = fs.mkdtempSync(
-  path.join(os.tmpdir(), "opencode-autodiscover-test-"),
+  path.join(os.tmpdir(), "opencode-autodiscover-test-")
 );
 process.env.OPENCODE_AUTODISCOVER_CACHE_DIR = CACHE_DIR_ROOT;
 
@@ -174,7 +174,7 @@ describe("lookupModelMetadata", () => {
           },
         ],
         timestamp: Date.now() - 25 * 60 * 60 * 1000,
-      }),
+      })
     );
 
     const data = {
@@ -286,7 +286,7 @@ describe("lookupModelMetadata", () => {
           "Accept-Encoding": "identity",
         }),
       }),
-      expect.any(Function),
+      expect.any(Function)
     );
   });
 });

@@ -1,12 +1,11 @@
 .github/
 .agents/
 tests/
-src/
 plugin-manual-testing/
 oxfmt.config.ts
 oxlint.config.ts
 tsconfig.json
-tsconfig.test.json
+tsconfig.build.json
 AGENTS.md
 .gitignore
 .gitattributes
