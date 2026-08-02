@@ -23,6 +23,8 @@ Or install globally:
 opencode plugin opencode-autodiscover -g
 ```
 
+> The v2 plugin (OpenCode v2 / beta plugin API) publishes under the `next` npm tag: `opencode plugin opencode-autodiscover@next`. The `latest` tag still tracks the v1 plugin for stable OpenCode.
+
 ### CLI Options
 
 ```
