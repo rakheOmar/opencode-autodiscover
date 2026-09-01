@@ -40,29 +40,43 @@ const refreshLocalModels = async (context: Plugin.Context): Promise<void> => {
 export default Plugin.define({
   id: "opencode.autodiscover.cli",
   setup: (context): Plugin.Cleanup => {
-    context.keymap.layer(() => ({
-      bindings: ["autodiscover.refresh"],
-      commands: [
-        {
-          group: "Models",
-          id: "autodiscover.refresh",
-          palette: true,
-          run: async () => {
-            await refreshLocalModels(context);
-          },
-          slash: {
-            aliases: ["models:refresh", "autodiscover:refresh"],
-            name: "refresh-models",
-          },
-          suggested: true,
-          title: "Refresh Local Models",
-        },
-      ],
-      mode: "global",
-    }));
+    let unregisterSlot: (() => void) | undefined;
+    try {
+      if (typeof context.ui?.slot === "function") {
+        unregisterSlot = context.ui.slot("app", () => {
+          try {
+            context.keymap.layer(() => ({
+              bindings: ["autodiscover.refresh"],
+              commands: [
+                {
+                  group: "Models",
+                  id: "autodiscover.refresh",
+                  palette: true,
+                  run: async () => {
+                    await refreshLocalModels(context);
+                  },
+                  slash: {
+                    aliases: ["models:refresh", "autodiscover:refresh"],
+                    name: "refresh-models",
+                  },
+                  suggested: true,
+                  title: "Refresh Local Models",
+                },
+              ],
+              mode: "global",
+            }));
+          } catch {
+            // Gracefully ignore if Keymap.Provider is not mounted in the current render pass
+          }
+          return null;
+        });
+      }
+    } catch {
+      // Gracefully handle environments without slot support
+    }
 
     return () => {
-      // Keymap layers registered by setup are cleaned up when the plugin unloads.
+      unregisterSlot?.();
     };
   },
 });

@@ -121,7 +121,12 @@ const createMockTuiContext = (options: MockContextOptions = {}) => {
       dialog: {} as unknown as TuiContext["ui"]["dialog"],
       format: { path: (p: string) => p },
       router: {} as unknown as TuiContext["ui"]["router"],
-      slot: vi.fn<() => () => void>(() => vi.fn<() => void>()),
+      slot: vi.fn<(name: string, render: () => unknown) => () => void>(
+        (_name, render) => {
+          render();
+          return vi.fn<() => void>();
+        }
+      ),
       tabs: {} as unknown as TuiContext["ui"]["tabs"],
       toast: mockToast,
     },

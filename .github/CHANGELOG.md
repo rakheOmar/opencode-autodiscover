@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2026-09-01
+
+### Fixed
+
+- TUI plugin: wrap keymap layer and slash command registration inside UI slot to ensure `<Keymap.Provider>` context is mounted
+- Automatically auto-discover local endpoints directly from `provider` (v1) and `providers` (v2) blocks in `opencode.json(c)`
+- Support `/v1/models` candidate probe when `baseURL` is specified without `/v1` suffix
+- Deduplicate concurrent in-flight OpenRouter metadata fetches to eliminate startup timeouts
+
 ## [2.0.1] - 2026-09-01
 
 ### Added
