@@ -14,7 +14,8 @@ This file configures how AI agents interact with this project.
 
 ## Architecture
 
-- `src/index.ts` — plugin entry: `Plugin.define({ id, setup })`; parses `options.endpoints`, registers the catalog transform and the `refresh-local-models` tool, refreshes via `ctx.catalog.reload()`
+- `src/index.ts` — server plugin entry: `Plugin.define({ id, setup })`. It parses `options.endpoints`. It registers the catalog transform and the `refresh-local-models` tool. It refreshes via `ctx.catalog.reload()`
+- `src/tui.ts` — CLI/TUI plugin entry: `Plugin.define({ id, setup })`. It registers the `/refresh-models` slash command and command palette action in a global keymap layer, triggers toasts, and synchronizes location model data
 - `src/fetcher.ts` — fetches `/v1/models` from a local endpoint
 - `src/filter.ts` — include/exclude glob filtering of model ids
 - `src/normalize.ts` — model ID normalization
@@ -47,6 +48,7 @@ This file configures how AI agents interact with this project.
 
 ## Test seams
 
-- Mocks: `vi.mock` with `vi.fn<(...) => ...>()` type parameters (required by the vitest lint rules); `vi.stubGlobal`/`unstubAllGlobals` for fetch
-- Cache isolation: tests redirect caches to temp dirs via the `OPENCODE_AUTODISCOVER_CACHE_DIR` env var — never touch the real user cache
-- `tests/plugin.test.ts` mocks the v2 context: `catalog.transform` captures the callback, `reload()` replays it, `tool.transform` applies at registration
+- Mock with `vi.mock` and `vi.fn<(...) => ...>()` type parameters (required by the vitest lint rules). Use `vi.stubGlobal` and `unstubAllGlobals` for fetch
+- Isolate caches. Tests redirect caches to temp dirs via the `OPENCODE_AUTODISCOVER_CACHE_DIR` env var. Never touch the real user cache
+- In `tests/plugin.test.ts`, mock the v2 context. `catalog.transform` captures the callback. `reload()` replays it. `tool.transform` applies at registration
+- In `tests/tui.test.ts`, mock the v2 TUI context. `keymap.layer` captures registered layers. `toast.show` records toast dispatches. `data.location.model` / `provider` capture sync and invalidation calls

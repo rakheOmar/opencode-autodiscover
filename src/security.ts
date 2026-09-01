@@ -1,6 +1,9 @@
 const VALID_PROTOCOLS = new Set(["http:", "https:"]);
 
 export const isValidUrl = (url: string): boolean => {
+  if (url.includes("${") || url.includes("}")) {
+    return false;
+  }
   try {
     const parsed = new URL(url);
     return VALID_PROTOCOLS.has(parsed.protocol);

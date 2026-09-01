@@ -3,6 +3,7 @@
 .zed/
 tests/
 plugin-manual-testing/
+manual-testing/
 oxlint.config.ts
 tsconfig.json
 tsconfig.build.json

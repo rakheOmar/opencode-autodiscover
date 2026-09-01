@@ -17,9 +17,11 @@ const CACHE_FILE = path.join(CACHE_DIR, "openrouter.json");
 const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 let cachedModels: OpenRouterModel[] | null = null;
+let inFlightFetch: Promise<OpenRouterModel[]> | null = null;
 
 export const clearCache = (): void => {
   cachedModels = null;
+  inFlightFetch = null;
   try {
     fs.rmSync(CACHE_FILE, { force: true });
   } catch {
@@ -122,18 +124,35 @@ const writeCache = (models: OpenRouterModel[]): void => {
   }
 };
 
-export const lookupModelMetadata = async (
-  modelId: string
-): Promise<OpenRouterModel | null> => {
-  let models = readCache();
-
-  if (!models) {
-    models = await fetchFromOpenRouter();
+const executeFetch = async (): Promise<OpenRouterModel[]> => {
+  try {
+    const models = await fetchFromOpenRouter();
     if (models.length > 0) {
       writeCache(models);
     }
+    return models;
+  } catch {
+    return [];
+  } finally {
+    inFlightFetch = null;
   }
+};
 
+const getOpenRouterModels = (): Promise<OpenRouterModel[]> => {
+  const cached = readCache();
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+  if (!inFlightFetch) {
+    inFlightFetch = executeFetch();
+  }
+  return inFlightFetch;
+};
+
+export const lookupModelMetadata = async (
+  modelId: string
+): Promise<OpenRouterModel | null> => {
+  const models = await getOpenRouterModels();
   const normalizedId = normalizeModelId(modelId);
 
   const match = models.find((m) => {

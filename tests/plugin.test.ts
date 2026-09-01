@@ -46,6 +46,7 @@ const createEndpoint = (
 ) => ({ baseURL, id, ...extra });
 
 interface ProviderDraft {
+  headers?: Record<string, string>;
   name: string;
   package: string;
   settings: Record<string, unknown>;
@@ -96,6 +97,12 @@ const createMockContext = (options: Readonly<Record<string, unknown>> = {}) => {
       }),
     },
     provider: {
+      list: vi.fn<
+        () => readonly {
+          models: ReadonlyMap<string, ModelDraft>;
+          provider: ProviderDraft & { id: string };
+        }[]
+      >(() => []),
       update: vi.fn<
         (id: string, update: (draft: ProviderDraft) => void) => void
       >((_id, update) => {
@@ -111,6 +118,7 @@ const createMockContext = (options: Readonly<Record<string, unknown>> = {}) => {
     }>
   >((callback) => {
     applyTransform = callback;
+    callback(catalog);
     return Promise.resolve({ dispose: vi.fn<() => void>() });
   });
   const reload = vi.fn<() => Promise<void>>(() => {
@@ -134,7 +142,11 @@ const createMockContext = (options: Readonly<Record<string, unknown>> = {}) => {
   return {
     catalog,
     ctx: {
-      catalog: { reload, transform: catalogTransform },
+      catalog: {
+        provider: catalog.provider,
+        reload,
+        transform: catalogTransform,
+      },
       options,
       tool: { transform: toolTransform },
     } as never,
@@ -166,7 +178,7 @@ describe("autodiscover plugin (v2)", () => {
     await plugin.setup(ctx);
 
     expect(providerDraft).toMatchObject({
-      package: "@ai-sdk/openai-compatible",
+      package: "@opencode-ai/ai/providers/openai-compatible",
       settings: { baseURL: "http://localhost:11434/v1" },
     });
     expect(
@@ -184,7 +196,7 @@ describe("autodiscover plugin (v2)", () => {
       undefined,
       undefined
     );
-    expect(reload).toHaveBeenCalledOnce();
+    expect(reload).not.toHaveBeenCalled();
   });
 
   it("passes API key and custom headers to fetchModels and provider settings", async () => {
@@ -208,10 +220,10 @@ describe("autodiscover plugin (v2)", () => {
       "sk-abc",
       { "x-custom": "1" }
     );
+    expect(providerDraft.headers).toStrictEqual({ "x-custom": "1" });
     expect(providerDraft.settings).toStrictEqual({
       apiKey: "sk-abc",
       baseURL: "http://localhost:1234/v1",
-      headers: { "x-custom": "1" },
     });
   });
 
@@ -399,7 +411,101 @@ describe("autodiscover plugin (v2)", () => {
     expect(mockClearOpenRouterCache).toHaveBeenCalledOnce();
     expect(mockClearModelsDevCache).toHaveBeenCalledOnce();
     expect(mockFetchModels).toHaveBeenCalledTimes(2);
-    expect(reload).toHaveBeenCalledTimes(2);
+    expect(reload).toHaveBeenCalledOnce();
     expect(result.content).toContain("refreshed");
+  });
+
+  it("auto-discovers models for OpenAI-compatible providers in the catalog when options.endpoints is empty", async () => {
+    mockFetchModels.mockResolvedValue([createModel("qwen2.5-coder:32b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { catalog, ctx, modelDraft, providerDraft, reload } =
+      createMockContext({});
+
+    catalog.provider.list.mockReturnValue([
+      {
+        models: new Map(),
+        provider: {
+          headers: { "sleev-harness": "opencode" },
+          id: "ninerouter",
+          name: "9Router",
+          package: "@opencode-ai/ai/providers/openai-compatible",
+          settings: {
+            apiKey: "sk-test",
+            baseURL: "http://optiplex:17321",
+          },
+        },
+      },
+    ]);
+
+    await plugin.setup(ctx);
+
+    expect(mockFetchModels).toHaveBeenCalledWith(
+      "http://optiplex:17321",
+      "sk-test",
+      { "sleev-harness": "opencode" }
+    );
+    expect(providerDraft).toMatchObject({
+      headers: { "sleev-harness": "opencode" },
+      name: "9Router",
+      package: "@opencode-ai/ai/providers/openai-compatible",
+      settings: {
+        apiKey: "sk-test",
+        baseURL: "http://optiplex:17321",
+      },
+    });
+    expect(modelDraft).toMatchObject({
+      enabled: true,
+      name: "qwen2.5-coder:32b",
+    });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("auto-discovers models for providers configured with npm and options fields", async () => {
+    mockFetchModels.mockResolvedValue([createModel("qwen2.5-coder:32b")]);
+    mockLookupOpenRouterMetadata.mockResolvedValue(null);
+    mockLookupModelsDevMetadata.mockResolvedValue(null);
+
+    const { catalog, ctx, modelDraft, providerDraft, reload } =
+      createMockContext({});
+
+    catalog.provider.list.mockReturnValue([
+      {
+        models: new Map(),
+        provider: {
+          id: "ninerouter",
+          name: "9Router",
+          npm: "@ai-sdk/openai-compatible",
+          options: {
+            apiKey: "sk-test",
+            baseURL: "http://optiplex:17321",
+            headers: { "sleev-harness": "opencode" },
+          },
+        } as unknown as ProviderDraft & { id: string },
+      },
+    ]);
+
+    await plugin.setup(ctx);
+
+    expect(mockFetchModels).toHaveBeenCalledWith(
+      "http://optiplex:17321",
+      "sk-test",
+      { "sleev-harness": "opencode" }
+    );
+    expect(providerDraft).toMatchObject({
+      headers: { "sleev-harness": "opencode" },
+      name: "9Router",
+      package: "@opencode-ai/ai/providers/openai-compatible",
+      settings: {
+        apiKey: "sk-test",
+        baseURL: "http://optiplex:17321",
+      },
+    });
+    expect(modelDraft).toMatchObject({
+      enabled: true,
+      name: "qwen2.5-coder:32b",
+    });
+    expect(reload).not.toHaveBeenCalled();
   });
 });

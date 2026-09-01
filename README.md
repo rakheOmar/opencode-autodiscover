@@ -134,7 +134,23 @@ Control which models are discovered using `include` and `exclude` glob patterns 
 
 Models are auto-discovered at startup and appear in `/models` natively.
 
-To refresh models, use the `refresh-local-models` tool in OpenCode — the catalog is replayed immediately, no restart needed.
+### Refreshing Models
+
+- **Terminal Slash Command**: Run `/refresh-models` (or `/models:refresh`, `/autodiscover:refresh`) in the OpenCode TUI prompt.
+- **Command Palette**: Select **Refresh Local Models** from the command palette.
+- **Agent Tool**: Use the `refresh-local-models` tool during agent sessions.
+
+When refreshed, the plugin synchronizes local endpoints, updates the catalog, and displays a toast notification in the terminal. A restart is not needed.
+
+### CLI / Remote Configuration
+
+When using a remote OpenCode server, configure the package in `cli.json` to keep TUI commands active locally:
+
+```json
+{
+  "plugins": ["opencode-autodiscover"]
+}
+```
 
 ## Development
 

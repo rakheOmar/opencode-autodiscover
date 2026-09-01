@@ -1,6 +1,6 @@
 {
   "name": "opencode-autodiscover",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Auto-discover models from local OpenAI-compatible API endpoints for OpenCode",
   "keywords": [
     "llm",
@@ -20,7 +20,10 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "exports": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tui": "./src/tui.ts"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "check": "ultracite check",
@@ -37,8 +40,25 @@
     "@types/node": "^26.1.2",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
+    "solid-js": "^1.9.15",
     "typescript": "^7.0.2",
     "ultracite": "^7.9.4",
     "vitest": "^4.1.10"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.4.5",
+    "@opentui/solid": ">=0.4.5",
+    "solid-js": ">=1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
   }
 }

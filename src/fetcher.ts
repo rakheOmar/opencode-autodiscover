@@ -35,28 +35,44 @@ export const fetchModels = async (
   }
 
   try {
-    const url = `${baseURL.replace(/\/$/u, "")}/models`;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
+    const cleanBase = baseURL.replace(/\/$/u, "");
+    const candidateUrls = cleanBase.endsWith("/v1")
+      ? [`${cleanBase}/models`]
+      : [`${cleanBase}/v1/models`, `${cleanBase}/models`];
+
+    const headers: Record<string, string> = {};
+
+    if (customHeaders && typeof customHeaders === "object") {
+      for (const [key, value] of Object.entries(customHeaders)) {
+        const lower = key.toLowerCase();
+        if (lower === "content-type" || lower === "authorization") {
+          continue;
+        }
+        if (value !== undefined && value !== null) {
+          headers[key] = String(value);
+        }
+      }
+    }
+
+    headers["Content-Type"] = "application/json";
 
     if (apiKey) {
       headers["Authorization"] = `Bearer ${apiKey}`;
     }
-
-    if (customHeaders && typeof customHeaders === "object") {
-      for (const [key, value] of Object.entries(customHeaders)) {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey === "content-type" || lowerKey === "authorization") {
-          continue;
+    const responses = await Promise.all(
+      candidateUrls.map(async (url) => {
+        try {
+          const res = await fetch(url, { headers });
+          return res.ok ? res : null;
+        } catch {
+          return null;
         }
-        headers[key] = String(value);
-      }
-    }
+      })
+    );
 
-    const response = await fetch(url, { headers });
+    const response = responses.find((res) => res !== null && res.ok);
 
-    if (!response.ok) {
+    if (!response) {
       return [];
     }
 
